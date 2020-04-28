@@ -43,34 +43,34 @@ def train_dynamics_model(dynamics_model,
             print(f'Step: {i} \tLoss: {loss.cpu()}')
 
 
-def train_dynamics_model(dynamics_model,
-                            trainloader: DataLoader,
-                            dynamics_optimizer: optim.Optimizer,
-                            device=None,
-                            log_interval: int = 100,
-                            summary_writer: SummaryWriter = None,
-                            start_step: int = 0):
-    dynamics_model.train()
-    criterion = nn.MSELoss()
+# def train_dynamics_model(dynamics_model,
+#                             trainloader: DataLoader,
+#                             dynamics_optimizer: optim.Optimizer,
+#                             device=None,
+#                             log_interval: int = 100,
+#                             summary_writer: SummaryWriter = None,
+#                             start_step: int = 0):
+#     dynamics_model.train()
+#     criterion = nn.MSELoss()
 
-    for i, data in enumerate(trainloader):
-        # Get input batch
-        x, y = data
-        x, y = x.to(device), y.to(device)
+#     for i, data in enumerate(trainloader):
+#         # Get input batch
+#         x, y = data
+#         x, y = x.to(device), y.to(device)
 
-        dynamics_optimizer.zero_grad()
+#         dynamics_optimizer.zero_grad()
 
-        # Forward pass
-        outputs = dynamics_model(x)
+#         # Forward pass
+#         outputs = dynamics_model(x)
 
-        loss = criterion(outputs, y)
-        loss.backward()
-        dynamics_optimizer.step()
-        # Log training statistics
-        if i % log_interval == 0:
-            if summary_writer:
-                summary_writer.add_scalar('dynamics loss', loss, start_step + i)
-            print(f'Step: {i} \tLoss: {loss.cpu()}')
+#         loss = criterion(outputs, y)
+#         loss.backward()
+#         dynamics_optimizer.step()
+#         # Log training statistics
+#         if i % log_interval == 0:
+#             if summary_writer:
+#                 summary_writer.add_scalar('dynamics loss', loss, start_step + i)
+#             print(f'Step: {i} \tLoss: {loss.cpu()}')
 
 
 def train_policy(dynamics_model: MCDropoutDynamicsNN,

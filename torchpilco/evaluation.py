@@ -70,5 +70,5 @@ def eval_dynamics_model(dynamics_model,
         # Forward pass
         outputs = dynamics_model(x)
         loss = criterion(outputs, y)
-        total_loss += loss
+        total_loss += loss.item()
     return total_loss / len(testloader)

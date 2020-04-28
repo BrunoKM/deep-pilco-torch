@@ -31,15 +31,18 @@ def rollout(env, policy, num_steps=1, device=None):
 
 
 def dynamics_model_rollout(env, policy, dynamics_model, cost_function, num_particles: int = 10,
-                           num_steps: int = 25, init_states=None, device=None, moment_matching:bool =False):
+                           num_steps: int = 25, init_states=None, device=None, moment_matching:bool =False,
+                           mc_model=True):
+    dynamics_model.eval()
     # Sample the initial state
     if init_states is None:
         cur_states = torch.FloatTensor([env.reset() for _ in range(num_particles)]).to(device)
     else:
         cur_states = torch.FloatTensor(init_states)
         assert cur_states.shape[0] == num_particles
-    # Sample dynamics dropout masks (set batch_size=num_particles)
-    dynamics_model.sample_new_mask(num_particles)
+    if mc_model:
+        # Sample dynamics dropout masks (set batch_size=num_particles)
+        dynamics_model.sample_new_mask(num_particles)
 
     states = [cur_states.data.cpu().numpy()]
     actions = []

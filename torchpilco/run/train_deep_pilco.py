@@ -1,7 +1,7 @@
-#!/usr/bin/env python3.8
 import gym
 import gym.envs.registration
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import os
 from torchpilco.cartpole_swingup import CartPoleSwingUp, cartpole_cost_torch
@@ -9,7 +9,7 @@ from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset, conver
 from torchpilco.dynamics_models import MCDropoutDynamicsNN
 from torchpilco.policy_models import RBFNetwork, RandomPolicy, sin_squash, gaussian_rbf
 from torchpilco.training import train_dynamics_model, train_policy
-from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, create_summary_writer
+from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, create_summary_writer, new_run_directory
 from torchpilco.evaluation import eval_policy, eval_dynamics_model, eval_policy_on_model
 import seaborn as sns
 import wandb
@@ -20,14 +20,13 @@ hyperparameter_defaults = dict(
     dynamics_lr=5e-5,
     dynamics_weight_decay=1e-3,
     dynamics_batch_size=100,
-    dynamics_num_iter=5000,
+    dynamics_num_iter=50,
     policy_lr=5e-4,
-    policy_num_iter=1000,
     num_steps_in_trial=25,
     policy_batch_size=10,
-    num_policy_iter=1000,
+    num_policy_iter=10,
     num_eval_trajectories=50,
-    num_pilco_iter=50,
+    num_pilco_iter=5,
     discount_factor=1.00,
     buffer_size=10,
     policy_output_bias=0,
@@ -40,7 +39,8 @@ config = wandb.config
 
 def main(config):
     print(config)
-    writer = create_summary_writer('runs/deep_pilco')
+    run_dir = new_run_directory('runs/deep_pilco')
+    writer = SummaryWriter(run_dir)
 
     # Register the custom cartpole environment
     gym.envs.registration.register(id='CartPoleSwingUp-v0',
@@ -98,6 +98,7 @@ def main(config):
     dataloader = torch.utils.data.DataLoader(
         scaled_up_dataset, batch_size=config.dynamics_batch_size, shuffle=True)
 
+    eval_rewards_list = []
     for i in range(config.num_pilco_iter):
         # Evaluate dynamics model on a test-set collected with rand. policy
         dynamics_test_loss = eval_dynamics_model(dynamics_model, test_dataloader)
@@ -118,6 +119,8 @@ def main(config):
         eval_rewards = eval_policy(
             env, rbf_policy, num_iter=config.num_eval_trajectories,
             num_steps=config.num_steps_in_trial)
+        eval_rewards_list.append(eval_rewards)
+
         eval_rewards_sim = eval_policy_on_model(
             env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
             num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False).mean().data.cpu().numpy()
@@ -130,7 +133,8 @@ def main(config):
         writer.add_figure(
             'rollout trajectory vs true',plot_model_rollout_vs_true(
                 env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
-                num_model_runs=10, num_steps=config.num_steps_in_trial)[0], i+1)
+                num_model_runs=10, num_steps=config.num_steps_in_trial,
+                log_dir=run_dir, log_name=f'step_{i}_traj')[0], i+1)
 
         # Gather more experience
         states, actions, rewards = rollout(
@@ -141,6 +145,10 @@ def main(config):
     # Save model to wandb
     torch.save(dynamics_model.state_dict(), os.path.join(wandb.run.dir, 'dynamics_model.pt'))
     torch.save(rbf_policy.state_dict(), os.path.join(wandb.run.dir, 'policy_model.pt'))
+
+    eval_rewards_path = run_dir / f'eval_rewards.txt'
+    with eval_rewards_path.open('w') as f:
+        np.savetxt(f, np.stack(eval_rewards_list, axis=0))
 
 
 if __name__ == '__main__':
