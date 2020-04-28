@@ -48,7 +48,7 @@ def eval_policy_on_model(env, policy, dynamics_model, cost_function, num_particl
     return -total_cost
 
 
-def eval_mc_dynamics_model(dynamics_model,
+def eval_dynamics_model(dynamics_model,
                            testloader: DataLoader,
                            device=None,
                            log_interval: int = 100,
