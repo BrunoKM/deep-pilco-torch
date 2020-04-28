@@ -29,6 +29,9 @@ hyperparameter_defaults = dict(
     num_dynamics_iter=5000,
     num_eval_trajectories=50,
     num_pilco_iter=50,
+    discount_factor=1.0,
+    buffer_size=10,
+    policy_output_bias=1,
 )
 
 wandb.init(config=hyperparameter_defaults, project="model-based-rl-for-control")
@@ -60,13 +63,14 @@ def main(config):
     # Policy
     rbf_policy = RBFNetwork(input_size=env.observation_space.shape[0], hidden_size=50,
                             output_size=env.action_space.shape[0], basis_func=gaussian_rbf,
-                            squash_func=lambda x: sin_squash(x, scale=10.0), output_bias=False)
+                            squash_func=lambda x: sin_squash(x, scale=10.0),
+                            output_bias=bool(config.policy_output_bias))
     wandb.watch(rbf_policy)
     policy_optimizer = torch.optim.Adam(rbf_policy.parameters(), lr=config.policy_lr)
     # Define a random policy for initial experience
     rand_policy = RandomPolicy(env)
 
-    data_buffer = DynamicsDataBuffer(capacity=config.num_steps_in_trial*10)
+    data_buffer = DynamicsDataBuffer(capacity=config.num_steps_in_trial * config.buffer_size)
     test_data_buffer = DynamicsDataBuffer(
         capacity=config.num_steps_in_trial * config.num_eval_trajectories)
     test_dataloader = torch.utils.data.DataLoader(
@@ -100,7 +104,8 @@ def main(config):
                      num_iter=config.num_policy_iter,
                      num_time_steps=config.num_steps_in_trial,
                      num_particles=config.policy_batch_size, moment_matching=True,
-                     summary_writer=writer, start_step=i*config.num_policy_iter)
+                     summary_writer=writer, start_step=i*config.num_policy_iter,
+                     discount_factor=config.discount_factor)
         # Evaluate the policy
         eval_rewards = eval_policy(
             env, rbf_policy, num_iter=config.num_eval_trajectories,
