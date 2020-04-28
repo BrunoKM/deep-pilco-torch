@@ -54,6 +54,9 @@ def train_policy(dynamics_model: MCDropoutDynamicsNN,
                  summary_writer: SummaryWriter = None,
                  start_step: int = 0):
     dynamics_model.eval()
+    # Freeze dynamics model weights
+    for param in dynamics_model.parameters():
+        param.requires_grad = False
     policy_model.train()
     for i in range(num_iter):
         # Sample the initial state
@@ -100,6 +103,9 @@ def train_policy(dynamics_model: MCDropoutDynamicsNN,
                 log_gradient_hist(policy_model, summary_writer,
                                   step=start_step + i, hist_name='policy_grads')
             print(f"Step\t{i}\tLoss:\t{total_cost}")
+    # Unfreeze the weights
+    for param in dynamics_model.parameters():
+        param.requires_grad = True
 
 
 def log_gradient_hist(model: nn.Module, writer: SummaryWriter,
