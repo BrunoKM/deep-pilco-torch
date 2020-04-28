@@ -119,8 +119,6 @@ termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4
 torch==1.4.0
-# Editable install with no version control (torchpilco==0.1)
--e /Users/bruno/projects/pilco-pytorch
 torchvision==0.5.0
 tornado==6.0.3
 tqdm==4.42.1
