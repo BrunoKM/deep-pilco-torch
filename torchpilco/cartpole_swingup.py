@@ -45,10 +45,10 @@ class CartPoleSwingUp(gym.Env):
         # self.x_threshold = 2.4
 
         state_numerical_limit = np.array([
-            np.finfo(np.float32).max,
-            np.finfo(np.float32).max,
-            np.finfo(np.float32).max,
-            np.finfo(np.float32).max])
+            np.finfo(np.float64).max,
+            np.finfo(np.float64).max,
+            np.finfo(np.float64).max,
+            np.finfo(np.float64).max])
 
         self.action_space = spaces.Box(-self.force_mag,
                                        self.force_mag, shape=(1,))
@@ -97,7 +97,7 @@ class CartPoleSwingUp(gym.Env):
 
     def reset(self):
         self.state = self.np_random.normal(loc=np.array(
-            [0.0, 0.0, np.pi, 0.0]), scale=np.array([0.02, 0.02, 0.02, 0.02]))
+            [0.0, 0.0, np.pi, 0.0]), scale=np.array([0.02, 0.02, 0.02, 0.02])).astype(np.float64)
         self.steps_beyond_done = None
         return self.state
 
