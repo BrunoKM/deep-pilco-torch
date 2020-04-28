@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def rollout(env, policy, dynamics=None, num_steps=1, device=None):
+def rollout(env, policy, num_steps=1, device=None):
     """Generate one trajectory with NN or System dynamics, return transitions"""
     cur_state = env.reset()
     
     states = [cur_state]
     actions = []
-    rewards = []
-    for _ in range(num_steps):
+    rewards = [-env.compute_cost()]
+    for _ in range(num_steps-1):
         # Convert to FloatTensor feedable into a Torch model
         cur_state = torch.FloatTensor(cur_state).unsqueeze(0).to(device)
         action = torch.flatten(policy(cur_state))  # Ensure ndims=1
@@ -26,6 +26,46 @@ def rollout(env, policy, dynamics=None, num_steps=1, device=None):
         cur_state = next_state
     # Convert to numpy arrays
     states, actions, rewards = tuple(map(lambda l: np.stack(l, axis=0),
+                                         (states, actions, rewards)))
+    return states, actions, rewards
+
+
+def dynamics_model_rollout(env, policy, dynamics_model, cost_function, num_particles: int = 10,
+                           num_steps: int = 25, init_states=None, device=None, moment_matching:bool =False):
+    # Sample the initial state
+    if init_states is None:
+        cur_states = torch.FloatTensor([env.reset() for _ in range(num_particles)]).to(device)
+    else:
+        cur_states = torch.FloatTensor(init_states)
+        assert cur_states.shape[0] == num_particles
+    # Sample dynamics dropout masks (set batch_size=num_particles)
+    dynamics_model.sample_new_mask(num_particles)
+
+    states = [cur_states.data.cpu().numpy()]
+    actions = []
+    rewards = [-cost_function(cur_states).data.cpu().numpy()]
+    for t in range(num_steps-1):
+        action = policy(cur_states)
+        # Concatenate particles and actions as inputs to Dynamics model
+        state_action_tensor = torch.cat([cur_states, action], 1)
+        # Get next states from the dynamics model
+        state_deltas = dynamics_model(state_action_tensor)
+        next_states = cur_states + state_deltas
+
+        # Moment matching
+        if moment_matching:
+            assert num_particles > 1
+            mu = torch.mean(next_states, dim=0, keepdim=True)
+            sigma = torch.std(next_states, dim=0, keepdim=True)
+            # Standard normal noise for particles
+            z = torch.randn(num_particles, mu.size(1)).to(device)
+            # Sample K new particles from a Gaussian 
+            next_states = mu + sigma * z
+        cur_states = next_states
+        states.append(cur_states.data.cpu().numpy())
+        actions.append(action.data.cpu().numpy())
+        rewards.append(-cost_function(cur_states).data.cpu().numpy())
+    states, actions, rewards = tuple(map(lambda l: np.stack(l, axis=1),
                                          (states, actions, rewards)))
     return states, actions, rewards
 

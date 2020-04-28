@@ -88,10 +88,10 @@ class CartPoleSwingUp(gym.Env):
         theta_dot = theta_dot + thetadot_update*self.dt
 
         self.state = np.array((x, x_dot, theta, theta_dot))
-        cost = self._compute_cost()
+        cost = self.compute_cost()
         return self.state, -cost, False, {}
 
-    def _compute_cost(self):
+    def compute_cost(self):
         cost = cartpole_cost_numpy(self.state, self.length, self.cost_sigma)
         return cost
 

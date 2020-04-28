@@ -44,7 +44,7 @@ def eval_policy_on_model(env, policy, dynamics_model, cost_function, num_particl
             # list_moments.append([mu, sigma])
         states = next_states
         total_cost += torch.mean(cost_function(states)) * discount_factor**t
-    return total_cost
+    return -total_cost
 
 
 def eval_mc_dynamics_model(dynamics_model,

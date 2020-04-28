@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 from torch.utils.tensorboard import SummaryWriter
-from torchpilco.data import rollout
+from torchpilco.data import rollout, dynamics_model_rollout
 from pathlib import Path
 from typing import Union
 
@@ -295,7 +295,7 @@ def create_summary_writer(path: Union[str, Path]):
 
 def plot_trajectory(states, actions, rewards, state_names=None):
     with sns.axes_style("whitegrid"):
-        fig, axes = plt.subplots(ncols=3, figsize=(14, 4), sharex=True)
+        fig, axes = plt.subplots(ncols=3, figsize=(10, 3), sharex=True)
         # Plot state
         t = np.arange(states.shape[0])
         for i in range(states.shape[1]):
@@ -303,6 +303,9 @@ def plot_trajectory(states, actions, rewards, state_names=None):
             axes[0].plot(t, states[:, i], label=label)
         axes[0].legend()
         axes[0].set_xlim(0, t[-1])
+
+        # Plot rewards
+        axes[2].plot(t, rewards, label='Reward')
 
         # Plot actions
         if actions.shape[0] != states.shape[0]:
@@ -314,10 +317,30 @@ def plot_trajectory(states, actions, rewards, state_names=None):
             for i in range(actions.shape[1]):
                 label = f'Action {i+1}'
                 axes[1].plot(t, actions[:, i], label=label)
-        # Optionally, plot reward:
-        if rewards is not None:
-            axes[2].plot(t, rewards, label='Reward')
         axes[0].legend()
         axes[1].legend()
         axes[2].legend()
+    return fig, axes
+
+def plot_model_rollout_vs_true(env, policy, dynamics_model, cost_function, num_model_runs: int = 10,
+                           num_steps: int = 25, device=None, moment_matching:bool =False):
+    true_states, true_actions, true_rewards = rollout(env, policy, num_steps=num_steps, device=device)
+    init_state = true_states[0, :]
+    init_states = np.repeat(init_state[None, :], num_model_runs, axis=0)
+
+    model_states, model_actions, model_rewards = dynamics_model_rollout(
+        env, policy=policy, dynamics_model=dynamics_model, cost_function=cost_function,
+        num_particles= num_model_runs, num_steps=num_steps, init_states=init_states, device=device, moment_matching=False)
+    with sns.axes_style("whitegrid"):
+        fig, axes = plt.subplots(ncols=true_states.shape[1], figsize=(10, 3), sharex=True)
+        t = np.arange(true_states.shape[0])
+        # Plot simulated states
+        for sim in range(model_states.shape[0]):
+            for i in range(true_states.shape[1]):
+                axes[i].plot(t, model_states[sim, :, i], color='green', alpha=0.5)
+        
+        # Plot true states
+        for i in range(true_states.shape[1]):
+            axes[i].plot(t, true_states[:, i], color='blue')
+            axes[i].set_xlim(0, t[-1])
     return fig, axes

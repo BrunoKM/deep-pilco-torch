@@ -2,6 +2,7 @@
 import gym
 import gym.envs.registration
 import torch
+import torch.nn.functional as F
 import numpy as np
 import os
 from torchpilco.cartpole_swingup import CartPoleSwingUp, cartpole_cost_torch
@@ -9,8 +10,8 @@ from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset, conver
 from torchpilco.dynamics_models import MCDropoutDynamicsNN
 from torchpilco.policy_models import RBFNetwork, RandomPolicy, sin_squash, gaussian_rbf
 from torchpilco.training import train_mc_dynamics_model, train_policy
-from torchpilco.utils import plot_trajectory, create_summary_writer
-from torchpilco.evaluation import eval_policy, eval_mc_dynamics_model
+from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, create_summary_writer
+from torchpilco.evaluation import eval_policy, eval_mc_dynamics_model, eval_policy_on_model
 import seaborn as sns
 import wandb
 
@@ -21,17 +22,17 @@ hyperparameter_defaults = dict(
     dynamics_weight_decay=1e-4,
     dynamics_batch_size=100,
     dynamics_num_iter=5000,
-    policy_lr=1e-3,
+    policy_lr=1e-4,
     policy_num_iter=1000,
     num_steps_in_trial=25,
     policy_batch_size=10,
     num_policy_iter=1000,
-    num_dynamics_iter=5000,
     num_eval_trajectories=50,
     num_pilco_iter=50,
     discount_factor=1.0,
     buffer_size=10,
     policy_output_bias=1,
+    squash_func='sin'
 )
 
 wandb.init(config=hyperparameter_defaults, project="model-based-rl-for-control")
@@ -39,6 +40,8 @@ config = wandb.config
 
 
 def main(config):
+    print(config)
+    print('config squash func:', config.squash_func, '\tconfig policy_lr: ', config.policy_lr)
     writer = create_summary_writer('runs/deep_pilco')
 
     # Register the custom cartpole environment
@@ -60,10 +63,17 @@ def main(config):
     dynamics_optimizer = torch.optim.Adam(dynamics_model.parameters(
     ), lr=config.dynamics_lr, weight_decay=config.dynamics_weight_decay)
     wandb.watch(dynamics_model)
+
     # Policy
+    if config.squash_func == 'sin':
+        squash_func = lambda x: sin_squash(x, scale=10.0)
+    elif config.squash_func == 'tanh':
+        squash_func = lambda x: 10 * F.tanh(x)
+    else:
+        raise ValueError(f'Invalid squashing function: {config.squash_func}')
     rbf_policy = RBFNetwork(input_size=env.observation_space.shape[0], hidden_size=50,
                             output_size=env.action_space.shape[0], basis_func=gaussian_rbf,
-                            squash_func=lambda x: sin_squash(x, scale=10.0),
+                            squash_func=squash_func,
                             output_bias=bool(config.policy_output_bias))
     wandb.watch(rbf_policy)
     policy_optimizer = torch.optim.Adam(rbf_policy.parameters(), lr=config.policy_lr)
@@ -86,7 +96,7 @@ def main(config):
     data_buffer.push(*convert_trajectory_to_training(states, actions))
 
     scaled_up_dataset = ScaledUpDataset(
-        data_buffer, new_length=int(config.dynamics_batch_size*config.num_dynamics_iter))
+        data_buffer, new_length=int(config.dynamics_batch_size*config.dynamics_num_iter))
     dataloader = torch.utils.data.DataLoader(
         scaled_up_dataset, batch_size=config.dynamics_batch_size, shuffle=True)
 
@@ -98,7 +108,7 @@ def main(config):
 
         train_mc_dynamics_model(dynamics_model, dataloader, dynamics_optimizer,
                                 summary_writer=writer,
-                                start_step=i*config.num_dynamics_iter)
+                                start_step=i*config.dynamics_num_iter)
         train_policy(dynamics_model, rbf_policy, policy_optimizer, env,
                      cost_function=cartpole_cost_torch,
                      num_iter=config.num_policy_iter,
@@ -110,9 +120,19 @@ def main(config):
         eval_rewards = eval_policy(
             env, rbf_policy, num_iter=config.num_eval_trajectories,
             num_steps=config.num_steps_in_trial)
-        writer.add_scalar('eval_reward', eval_rewards.mean(), i+1)
+        eval_rewards_sim = eval_policy_on_model(
+            env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
+            num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False)
+
+        writer.add_scalar('rewards/evaluation_real', eval_rewards.mean(), i+1)
+        writer.add_scalar('rewards/evaluation_model', eval_rewards_sim, i+1)
         wandb.log({'eval_reward': eval_rewards.mean()})
-        writer.add_histogram('rewards/evaluation', eval_rewards, i+1)
+        writer.add_histogram('rewards/evaluation_real_hist', eval_rewards, i+1)
+        # Compare model trajectories to real trajectories
+        writer.add_figure(
+            'rollout trajectory vs true',plot_model_rollout_vs_true(
+                env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
+                num_model_runs=10, num_steps=config.num_steps_in_trial)[0], i+1)
 
         # Gather more experience
         states, actions, rewards = rollout(
