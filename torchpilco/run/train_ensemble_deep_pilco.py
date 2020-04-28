@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 import gym
 import gym.envs.registration
 import torch
@@ -6,7 +5,7 @@ import numpy as np
 import os
 from torchpilco.cartpole_swingup import CartPoleSwingUp, cartpole_cost_torch
 from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset, convert_trajectory_to_training
-from torchpilco.dynamics_models import MCDropoutDynamicsNN
+from torchpilco.dynamics_models import Ensemble
 from torchpilco.policy_models import RBFNetwork, RandomPolicy, sin_squash, gaussian_rbf
 from torchpilco.training import train_dynamics_model, train_policy
 from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, create_summary_writer
@@ -16,9 +15,10 @@ import wandb
 
 hyperparameter_defaults = dict(
     dropout=0.05,
+    num_ens_models=5,
     dynamics_hidden_size=200,
     dynamics_lr=5e-5,
-    dynamics_weight_decay=1e-3,
+    dynamics_weight_decay=1e-6,
     dynamics_batch_size=100,
     dynamics_num_iter=5000,
     policy_lr=5e-4,
@@ -40,7 +40,7 @@ config = wandb.config
 
 def main(config):
     print(config)
-    writer = create_summary_writer('runs/deep_pilco')
+    writer = create_summary_writer('runs/deep_pilco_ens')
 
     # Register the custom cartpole environment
     gym.envs.registration.register(id='CartPoleSwingUp-v0',
@@ -54,13 +54,16 @@ def main(config):
     env.seed(seed)
 
     # Dynamics
-    dynamics_model = MCDropoutDynamicsNN(
+    dynamics_models = [DynamicsNN(
         input_dim=env.observation_space.shape[0]+env.action_space.shape[0],
         output_dim=env.observation_space.shape[0],
-        hidden_size=config.dynamics_hidden_size, drop_prob=config.dropout, drop_input=True)
-    dynamics_optimizer = torch.optim.Adam(dynamics_model.parameters(
-    ), lr=config.dynamics_lr, weight_decay=config.dynamics_weight_decay)
-    wandb.watch(dynamics_model)
+        hidden_size=config.dynamics_hidden_size,
+        drop_prob=config.dropout) for _ in range(config.num_ens_models)]
+    
+    dynamics_model = Ensemble(dynamics_models)
+    dynamics_optimizers = [torch.optim.Adam(
+        model.parameters(), lr=config.dynamics_lr,
+        weight_decay=config.dynamics_weight_decay) for model in dynamics_models]
 
     # Policy
     if config.squash_func == 'sin':
@@ -100,13 +103,18 @@ def main(config):
 
     for i in range(config.num_pilco_iter):
         # Evaluate dynamics model on a test-set collected with rand. policy
-        dynamics_test_loss = eval_dynamics_model(dynamics_model, test_dataloader)
+        dynamics_test_loss = []
+        for i, model in enumerate(dynamics_models):
+            dynamics_test_loss.append(eval_dynamics_model(dynamics_model, test_dataloader))
+            train_dynamics_model(dynamics_model, dataloader, dynamics_optimizer,
+                                    summary_writer=writer,
+                                    start_step=i*config.dynamics_num_iter,
+                                    mc_model=False,
+                                    logger_suffix=f'_{i+1}')
+        dynamics_test_loss = np.array(dynamics_test_loss).mean()
         writer.add_scalar('dynamics_val_loss', dynamics_test_loss, i)
         wandb.log({'dynamics_val_loss': dynamics_test_loss})
 
-        train_dynamics_model(dynamics_model, dataloader, dynamics_optimizer,
-                                summary_writer=writer,
-                                start_step=i*config.dynamics_num_iter)
         train_policy(dynamics_model, rbf_policy, policy_optimizer, env,
                      cost_function=cartpole_cost_torch,
                      num_iter=config.num_policy_iter,
@@ -120,7 +128,7 @@ def main(config):
             num_steps=config.num_steps_in_trial)
         eval_rewards_sim = eval_policy_on_model(
             env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
-            num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False).mean().data.cpu().numpy()
+            num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False, mc_model=False).mean().data.cpu().numpy()
 
         writer.add_scalar('rewards/evaluation_real', eval_rewards.mean(), i+1)
         writer.add_scalar('rewards/evaluation_model', eval_rewards_sim, i+1)
@@ -138,9 +146,6 @@ def main(config):
         writer.add_figure('sampled trajectory', plot_trajectory(states, actions, rewards)[0], i+1)
         data_buffer.push(*convert_trajectory_to_training(states, actions))
         print(f'Iteration {i} complete')
-    # Save model to wandb
-    torch.save(dynamics_model.state_dict(), os.path.join(wandb.run.dir, 'dynamics_model.pt'))
-    torch.save(rbf_policy.state_dict(), os.path.join(wandb.run.dir, 'policy_model.pt'))
 
 
 if __name__ == '__main__':

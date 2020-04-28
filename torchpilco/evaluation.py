@@ -15,11 +15,12 @@ def eval_policy(env, policy, num_iter: int = 50, num_steps: int = 25, device=Non
 
 def eval_policy_on_model(env, policy, dynamics_model, cost_function, num_particles: int = 10,
                          num_steps: int = 25, discount_factor=1.0, device=None,
-                         moment_matching=False):
+                         moment_matching=False, mc_model=True):
     # Sample the initial state
     states = torch.FloatTensor([env.reset() for _ in range(num_particles)]).to(device)
-    # Sample dynamics dropout masks (set batch_size=num_particles)
-    dynamics_model.sample_new_mask(num_particles)
+    if mc_model:
+        # Sample dynamics dropout masks (set batch_size=num_particles)
+        dynamics_model.sample_new_mask(num_particles)
 
     total_cost = torch.mean(cost_function(states))
 
@@ -50,7 +51,8 @@ def eval_policy_on_model(env, policy, dynamics_model, cost_function, num_particl
 def eval_mc_dynamics_model(dynamics_model,
                            testloader: DataLoader,
                            device=None,
-                           log_interval: int = 100):
+                           log_interval: int = 100,
+                           mc_model=True):
     #    summary_writer: SummaryWriter = None,
     dynamics_model.eval()
     criterion = nn.MSELoss()
@@ -62,7 +64,8 @@ def eval_mc_dynamics_model(dynamics_model,
         x, y = data
         x, y = x.to(device), y.to(device)
 
-        dynamics_model.sample_new_mask(batch_size=testloader.batch_size)
+        if mc_model:
+            dynamics_model.sample_new_mask(batch_size=testloader.batch_size)
 
         # Forward pass
         outputs = dynamics_model(x)
