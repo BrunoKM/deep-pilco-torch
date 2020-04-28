@@ -22,7 +22,7 @@ hyperparameter_defaults = dict(
     dynamics_weight_decay=1e-4,
     dynamics_batch_size=100,
     dynamics_num_iter=5000,
-    policy_lr=1e-4,
+    policy_lr=5e-4,
     policy_num_iter=1000,
     num_steps_in_trial=25,
     policy_batch_size=10,
@@ -31,7 +31,7 @@ hyperparameter_defaults = dict(
     num_pilco_iter=50,
     discount_factor=1.0,
     buffer_size=10,
-    policy_output_bias=1,
+    policy_output_bias=0,
     squash_func='sin'
 )
 
@@ -122,7 +122,7 @@ def main(config):
             num_steps=config.num_steps_in_trial)
         eval_rewards_sim = eval_policy_on_model(
             env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
-            num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False)
+            num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False).mean().data.cpu().numpy()
 
         writer.add_scalar('rewards/evaluation_real', eval_rewards.mean(), i+1)
         writer.add_scalar('rewards/evaluation_model', eval_rewards_sim, i+1)
