@@ -2,7 +2,6 @@
 import gym
 import gym.envs.registration
 import torch
-import torch.nn.functional as F
 import numpy as np
 import os
 from torchpilco.cartpole_swingup import CartPoleSwingUp, cartpole_cost_torch
@@ -68,7 +67,7 @@ def main(config):
     if config.squash_func == 'sin':
         squash_func = lambda x: sin_squash(x, scale=10.0)
     elif config.squash_func == 'tanh':
-        squash_func = lambda x: 10 * F.tanh(x)
+        squash_func = lambda x: 10 * torch.tanh(x)
     else:
         raise ValueError(f'Invalid squashing function: {config.squash_func}')
     rbf_policy = RBFNetwork(input_size=env.observation_space.shape[0], hidden_size=50,
