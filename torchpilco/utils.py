@@ -19,31 +19,6 @@ def execute_torch_policy(observation, policy, device=None):
     return policy(observation_tensor).detach().cpu().numpy()
 
 
-def plot_databuffer(data, ylim=None):
-    fig, ax = plt.subplots(1, 1)
-
-    for i in range(len(data.buffer)):
-        tau = data.buffer[i]
-
-        s = np.concatenate([tau[:, 2], [tau[-1, -2]]])
-
-        if i == len(data.buffer) - 1:  # latest trajectory in red
-            ax.plot(np.arange(0, s.shape[0]), s, 'red')
-        else:
-            ax.plot(np.arange(0, s.shape[0]), s, 'blue')
-
-    # Figure settings
-    ax.grid()
-    ax.set_title('Trajectories in data buffer')
-    ax.set_xlabel('Time step')
-    ax.set_ylabel('Angle (in radians)')
-    if ylim is not None:
-        ax.set_ylim(ylim)
-    plt.close()  # Close figure to save memory
-
-    return fig
-
-
 def new_run_directory(path: Union[str, Path]):
     path = Path(path)
     run_name = path.name

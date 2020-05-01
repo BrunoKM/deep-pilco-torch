@@ -89,7 +89,7 @@ class MLPPolicy(nn.Module):
     """One-hidden layer multi-layer perceptron policy"""
 
     def __init__(self, input_size, output_size, hidden_size=100, output_bias=False,
-                 squash_func = None):
+                 squash_func=None):
         super().__init__()
 
         self.input_size = input_size

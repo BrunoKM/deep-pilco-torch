@@ -218,25 +218,3 @@ def cartpole_cost_torch(states, pole_length=0.6, cost_sigma=0.25):
     sq_distance = torch.sum((tip_position - target)**2, dim=1)
     cost = -torch.exp(-0.5*sq_distance/cost_sigma**2) + 1
     return cost
-    
-
-# def cost(states, sigma=0.25):
-#     """Pendulum-v0: Same as OpenAI-Gym"""
-#     l = 0.6
-    
-#     goal = Variable(torch.FloatTensor([0.0, l])).cuda()
-
-#     # Cart position
-#     cart_x = states[:, 0]
-#     # Pole angle
-#     thetas = states[:, 2]
-#     # Pole position
-#     x = torch.sin(thetas)*l
-#     y = torch.cos(thetas)*l
-#     positions = torch.stack([cart_x + x, y], 1)
-    
-#     squared_distance = torch.sum((goal - positions)**2, 1)
-#     squared_sigma = sigma**2
-#     cost = 1 - torch.exp(-0.5*squared_distance/squared_sigma)
-    
-#     return cost

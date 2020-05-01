@@ -140,39 +140,3 @@ class ScaledUpDataset(data.Dataset):
         if idx < 0:
             raise IndexError("Index must be non-negative")
         return self.dataset[idx % len(self.dataset)]
-
-
-# def dynamics_model_rollout():
-#     # Intial state
-#     if init_particle is not None:
-#         init_state = init_particle
-#         env.reset()
-#         # Unwrap accesses the underlying class of a gym environment
-#         env.unwrapped.state = init_particle
-#     else:
-#         init_state = env.reset()
-    
-#     transitions = []
-#     for _ in range(num_steps):
-#         # Convert to FloatTensor, Variable and send to GPU
-#         init_state = Variable(torch.FloatTensor(init_state).unsqueeze(0)).to(device)
-#         # Select an action by policy
-#         action = policy(init_state)
-#         # Take action via NN/System dynamics
-#         if mode == 'System':
-#             s_next, _, _, _ = env.step(action.data.cpu().numpy())
-#         elif mode == 'NN':
-#             state_action = torch.cat([init_state, action.unsqueeze(0)], 1)
-#             s_next = dynamics(state_action).data.cpu().numpy()[0]
-#         else:
-#             raise ValueError('The value of mode must be either NN or System. ')
-        
-#         # Record data
-#         transitions.append(np.concatenate([init_state.data.cpu().numpy()[0],
-#                                            action.data.cpu().numpy(), s_next]))
-        
-#         # Update s as s_next for recording next transition
-#         init_state = s_next
-        
-#     return np.array(transitions)
-

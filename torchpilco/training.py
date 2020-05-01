@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchpilco.dynamics_models import MCDropoutDynamicsNN, Ensemble
 
 
-def train_dynamics_model(dynamics_model,
+def train_dynamics_model(dynamics_model: nn.Module,
                             trainloader: DataLoader,
                             dynamics_optimizer: optim.Optimizer,
                             device=None,
@@ -15,6 +15,17 @@ def train_dynamics_model(dynamics_model,
                             start_step: int = 0,
                             mc_model=True,
                             logger_suffix=''):
+    """Train the dynamics model on data available in trainloader.
+
+    Args:
+        dynamics_optimizer (optim.Optimizer): torch optimizer for the dynamics model
+        device: Which device to train on (gpu/cpu). Defaults to None (interpreted as CPU).
+        summary_writer (SummaryWriter, optional): TensorBoard summary writer for logging.
+        start_step (int, optional): What step to start logging on in TensorBoard. Defaults to 0.
+        mc_model (bool, optional): Whether the dynamics model is an MC-Dropout model,
+            and a mask needs to be sampled. Defaults to True.
+        logger_suffix (str, optional): suffix to be used for logging in TensorBoard.
+    """
     dynamics_model.train()
     criterion = nn.MSELoss()
 
@@ -41,36 +52,6 @@ def train_dynamics_model(dynamics_model,
                 summary_writer.add_scalar(
                     'dynamics loss' + logger_suffix, loss, start_step + i)
             print(f'Step: {i} \tLoss: {loss.cpu()}')
-
-
-# def train_dynamics_model(dynamics_model,
-#                             trainloader: DataLoader,
-#                             dynamics_optimizer: optim.Optimizer,
-#                             device=None,
-#                             log_interval: int = 100,
-#                             summary_writer: SummaryWriter = None,
-#                             start_step: int = 0):
-#     dynamics_model.train()
-#     criterion = nn.MSELoss()
-
-#     for i, data in enumerate(trainloader):
-#         # Get input batch
-#         x, y = data
-#         x, y = x.to(device), y.to(device)
-
-#         dynamics_optimizer.zero_grad()
-
-#         # Forward pass
-#         outputs = dynamics_model(x)
-
-#         loss = criterion(outputs, y)
-#         loss.backward()
-#         dynamics_optimizer.step()
-#         # Log training statistics
-#         if i % log_interval == 0:
-#             if summary_writer:
-#                 summary_writer.add_scalar('dynamics loss', loss, start_step + i)
-#             print(f'Step: {i} \tLoss: {loss.cpu()}')
 
 
 def train_policy(dynamics_model: MCDropoutDynamicsNN,

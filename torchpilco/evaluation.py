@@ -6,6 +6,10 @@ from torchpilco.data import rollout
 
 
 def eval_policy(env, policy, num_iter: int = 50, num_steps: int = 25, device=None):
+    """
+    Evaluate the policy on the true environment by sampling an initial state num_iter
+    times and evaluating each trajectory.
+    """
     rewards_arr = np.zeros([num_iter])
     for i in range(num_iter):
         states, actions, rewards = rollout(env, policy, num_steps=num_steps, device=device)
@@ -16,6 +20,10 @@ def eval_policy(env, policy, num_iter: int = 50, num_steps: int = 25, device=Non
 def eval_policy_on_model(env, policy, dynamics_model, cost_function, num_particles: int = 10,
                          num_steps: int = 25, discount_factor=1.0, device=None,
                          moment_matching=False, mc_model=True):
+    """
+    Evaluate the policy on the dynamics model by sampling an initial state num_iter
+    times and evaluating each trajectory.
+    """
     # Sample the initial state
     states = torch.FloatTensor([env.reset() for _ in range(num_particles)]).to(device)
     if mc_model:
