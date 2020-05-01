@@ -85,45 +85,32 @@ class RandomPolicy(nn.Module):
         return torch.FloatTensor(self.env.action_space.sample())
 
 
-# class LinearPolicy(nn.Module):
-#     """Linear policy for the controller"""
-
-#     def __init__(self, env, bias=True):
-#         super().__init__()
-#         self.env = env
-#         self.out = nn.Linear(in_features=env.observation_space.shape[0],
-#                              out_features=1,
-#                              bias=bias)
-
-#     def forward(self, x):
-#         x = self.out(x)
-#         return torch.clamp(x[:, 0], self.env.action_space.low[0], self.env.action_space.high[0])
-
-
 class MLPPolicy(nn.Module):
-    """Multi-layer Perceptron policy"""
+    """One-hidden layer multi-layer perceptron policy"""
 
-    def __init__(self, env, hidden_size=50):
+    def __init__(self, input_size, output_size, hidden_size=100, output_bias=False,
+                 squash_func = None):
         super().__init__()
 
-        self.env = env
+        self.input_size = input_size
+        self.output_size = output_size
         self.hidden_size = hidden_size
+        self.output_bias = output_bias
+        self.squash_func = squash_func
 
         # Fully connected layers
-        self.hidden = nn.Linear(in_features=env.observation_space.shape[0]+1,
+        self.hidden = nn.Linear(in_features=self.input_size,
                                 out_features=self.hidden_size,
                                 bias=True)
         self.out = nn.Linear(in_features=self.hidden_size,
-                             out_features=1,  # 1D continuous action space [mu, log-space of sigma]
-                             bias=True)
+                             out_features=self.output_size,
+                             bias=output_bias)
 
     def forward(self, x):
-        x = torch.stack([x[:, 0], x[:, 1], x[:, 0] + polex, poley, x[:, 3]], 1)
-
-        x = F.relu(self.hidden(x))
-        x = self.out(x)
-        x[:, 0] = torch.clamp(x[:, 0], self.env.action_space.low[0], self.env.action_space.high[0])
-        return x[:, 0]
+        hidden = torch.sigmoid(self.hidden(x))
+        out = self.out(hidden)
+        out = self.squash_func(out) if self.squash_func else out
+        return out
 
 
 def gaussian_rbf(sq_distances):
