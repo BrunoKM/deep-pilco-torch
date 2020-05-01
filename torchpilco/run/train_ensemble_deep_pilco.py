@@ -15,14 +15,14 @@ import seaborn as sns
 import wandb
 
 hyperparameter_defaults = dict(
-    dropout=0.1,
+    dropout=0.05,
     num_ens_models=10,
     dynamics_hidden_size=200,
-    dynamics_lr=1e-5,
-    dynamics_weight_decay=2e-4,
+    dynamics_lr=5e-5,
+    dynamics_weight_decay=1e-4,
     dynamics_batch_size=100,
-    dynamics_num_iter=1000,
-    policy_lr=2.5e-4,
+    dynamics_num_iter=5000,
+    policy_lr=7e-4,
     num_steps_in_trial=25,
     num_policy_iter=1000,
     num_eval_trajectories=50,
