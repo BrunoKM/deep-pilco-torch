@@ -7,7 +7,7 @@ A reimplmentation of ["Improving PILCO with Bayesian Neural Network Dynamics Mod
 
 The Deep Ensembles variant's hyperparameters have not been optimised, hence the comparatively poor performce. 
 
-The results obtained do not appear to quite match those obtained by original authors neither in [1] or [2].
+Even after an extensive hyperparameter search of the parameters not mentioned in the paper, the results obtained do not appear to quite match those obtained by original authors neither in [1] or [2].
 
 # Run
 #### Install dependencies
