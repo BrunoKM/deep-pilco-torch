@@ -32,6 +32,7 @@ hyperparameter_defaults = dict(
     buffer_size=10,
     policy_output_bias=0,
     squash_func='tanh',
+    random_seed=0
 )
 
 wandb.init(config=hyperparameter_defaults, project="model-based-rl-for-control")
@@ -49,10 +50,9 @@ def main(config):
     env = gym.make('CartPoleSwingUp-v0')
 
     # Set a random seed
-    seed = 1
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    env.seed(seed)
+    np.random.seed(config.random_seed)
+    torch.manual_seed(config.random_seed)
+    env.seed(config.random_seed)
 
     # Dynamics
     dynamics_model = MCDropoutDynamicsNN(
