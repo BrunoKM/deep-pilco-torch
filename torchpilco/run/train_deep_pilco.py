@@ -18,10 +18,12 @@ hyperparameter_defaults = dict(
     dropout=0.05,
     dynamics_hidden_size=200,
     dynamics_lr=5e-5,
+    dynamics_lr_gamma=1.0,  # Step Learning Rate schedule factor
     dynamics_weight_decay=1e-4,
     dynamics_batch_size=100,
     dynamics_num_iter=5000,
     policy_lr=7e-4,
+    policy_lr_gamma=1.0,  # Step Learning Rate schedule factor
     policy_model='rbf',
     policy_batch_size=10,
     num_policy_iter=1000,
@@ -61,6 +63,7 @@ def main(config):
         hidden_size=config.dynamics_hidden_size, drop_prob=config.dropout, drop_input=True)
     dynamics_optimizer = torch.optim.Adam(dynamics_model.parameters(
     ), lr=config.dynamics_lr, weight_decay=config.dynamics_weight_decay)
+    dynamics_scheduler = torch.optim.lr_scheduler.StepLR(dynamics_optimizer, step_size=1, gamma=config.dynamics_lr_gamma)
     wandb.watch(dynamics_model)
 
     # Policy
@@ -83,6 +86,7 @@ def main(config):
                                 output_bias=bool(config.policy_output_bias))
     wandb.watch(policy_model)
     policy_optimizer = torch.optim.Adam(policy_model.parameters(), lr=config.policy_lr)
+    policy_scheduler = torch.optim.lr_scheduler.StepLR(policy_optimizer, step_size=1, gamma=config.policy_lr_gamma)
     # Define a random policy for initial experience
     rand_policy = RandomPolicy(env)
 
@@ -149,6 +153,9 @@ def main(config):
             env, policy_model, num_steps=config.num_steps_in_trial)
         writer.add_figure('sampled trajectory', plot_trajectory(states, actions, rewards)[0], i+1)
         data_buffer.push(*convert_trajectory_to_training(states, actions))
+        # Adjust learning rates
+        dynamics_scheduler.step()
+        policy_scheduler.step()
         print(f'Iteration {i} complete')
     # Save model to wandb
     torch.save(dynamics_model.state_dict(), os.path.join(wandb.run.dir, 'dynamics_model.pt'))
