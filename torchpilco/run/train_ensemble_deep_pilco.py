@@ -3,15 +3,13 @@ import gym.envs.registration
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-import os
 from torchpilco.cartpole_swingup import CartPoleSwingUp, cartpole_cost_torch
 from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset, convert_trajectory_to_training
 from torchpilco.dynamics_models import Ensemble, DynamicsNN
 from torchpilco.policy_models import RBFNetwork, RandomPolicy, sin_squash, gaussian_rbf
 from torchpilco.training import train_dynamics_model, train_policy
-from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, create_summary_writer, new_run_directory
+from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, new_run_directory
 from torchpilco.evaluation import eval_policy, eval_dynamics_model, eval_policy_on_model
-import seaborn as sns
 import wandb
 
 hyperparameter_defaults = dict(
@@ -59,7 +57,7 @@ def main(config):
         output_dim=env.observation_space.shape[0],
         hidden_size=config.dynamics_hidden_size,
         drop_prob=config.dropout) for _ in range(config.num_ens_models)]
-    
+
     dynamics_model = Ensemble(dynamics_models)
     dynamics_optimizers = [torch.optim.Adam(
         model.parameters(), lr=config.dynamics_lr,
@@ -67,9 +65,9 @@ def main(config):
 
     # Policy
     if config.squash_func == 'sin':
-        squash_func = lambda x: sin_squash(x, scale=10.0)
+        def squash_func(x): return sin_squash(x, scale=10.0)
     elif config.squash_func == 'tanh':
-        squash_func = lambda x: 10 * torch.tanh(x)
+        def squash_func(x): return 10 * torch.tanh(x)
     else:
         raise ValueError(f'Invalid squashing function: {config.squash_func}')
     rbf_policy = RBFNetwork(input_size=env.observation_space.shape[0], hidden_size=50,
@@ -107,24 +105,25 @@ def main(config):
             # Evaluate dynamics model on a test-set collected with rand. policy
             dynamics_test_loss = []
             for j, model in enumerate(dynamics_models):
-                dynamics_test_loss.append(eval_dynamics_model(dynamics_model, test_dataloader, mc_model=False))
+                dynamics_test_loss.append(eval_dynamics_model(
+                    dynamics_model, test_dataloader, mc_model=False))
                 train_dynamics_model(dynamics_model, dataloader, dynamics_optimizers[j],
-                                        summary_writer=writer,
-                                        start_step=i*config.dynamics_num_iter,
-                                        mc_model=False,
-                                        logger_suffix=f'_{j+1}')
+                                     summary_writer=writer,
+                                     start_step=i*config.dynamics_num_iter,
+                                     mc_model=False,
+                                     logger_suffix=f'_{j+1}')
             dynamics_test_loss = np.array(dynamics_test_loss).mean()
             writer.add_scalar('dynamics_val_loss', dynamics_test_loss, i)
             wandb.log({'dynamics_val_loss': dynamics_test_loss})
 
             train_policy(dynamics_model, rbf_policy, policy_optimizer, env,
-                        cost_function=cartpole_cost_torch,
-                        num_iter=config.num_policy_iter,
-                        num_time_steps=config.num_steps_in_trial,
-                        num_particles=config.num_ens_models, moment_matching=True,
-                        summary_writer=writer, start_step=i*config.num_policy_iter,
-                        discount_factor=config.discount_factor,
-                        mc_model=False)
+                         cost_function=cartpole_cost_torch,
+                         num_iter=config.num_policy_iter,
+                         num_time_steps=config.num_steps_in_trial,
+                         num_particles=config.num_ens_models, moment_matching=True,
+                         summary_writer=writer, start_step=i*config.num_policy_iter,
+                         discount_factor=config.discount_factor,
+                         mc_model=False)
             # Evaluate the policy
             eval_rewards = eval_policy(
                 env, rbf_policy, num_iter=config.num_eval_trajectories,
@@ -133,7 +132,7 @@ def main(config):
 
             eval_rewards_sim = eval_policy_on_model(
                 env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
-                num_particles = config.num_ens_models, num_steps=config.num_steps_in_trial, moment_matching=False, mc_model=False).mean().data.cpu().numpy()
+                num_particles=config.num_ens_models, num_steps=config.num_steps_in_trial, moment_matching=False, mc_model=False).mean().data.cpu().numpy()
 
             writer.add_scalar('rewards/evaluation_real', eval_rewards.mean(), i+1)
             writer.add_scalar('rewards/evaluation_model', eval_rewards_sim, i+1)
@@ -141,7 +140,7 @@ def main(config):
             writer.add_histogram('rewards/evaluation_real_hist', eval_rewards, i+1)
             # Compare model trajectories to real trajectories
             writer.add_figure(
-                'rollout trajectory vs true',plot_model_rollout_vs_true(
+                'rollout trajectory vs true', plot_model_rollout_vs_true(
                     env, rbf_policy, dynamics_model, cost_function=cartpole_cost_torch,
                     num_model_runs=config.num_ens_models, num_steps=config.num_steps_in_trial,
                     mc_model=False,
@@ -150,7 +149,8 @@ def main(config):
             # Gather more experience
             states, actions, rewards = rollout(
                 env, rbf_policy, num_steps=config.num_steps_in_trial)
-            writer.add_figure('sampled trajectory', plot_trajectory(states, actions, rewards)[0], i+1)
+            writer.add_figure('sampled trajectory', plot_trajectory(
+                states, actions, rewards)[0], i+1)
             data_buffer.push(*convert_trajectory_to_training(states, actions))
             print(f'Iteration {i} complete')
     except:

@@ -9,9 +9,8 @@ from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset, conver
 from torchpilco.dynamics_models import MCDropoutDynamicsNN
 from torchpilco.policy_models import RBFNetwork, RandomPolicy, MLPPolicy, sin_squash, gaussian_rbf
 from torchpilco.training import train_dynamics_model, train_policy
-from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, create_summary_writer, new_run_directory
+from torchpilco.utils import plot_trajectory, plot_model_rollout_vs_true, new_run_directory
 from torchpilco.evaluation import eval_policy, eval_dynamics_model, eval_policy_on_model
-import seaborn as sns
 import wandb
 
 hyperparameter_defaults = dict(
@@ -63,30 +62,34 @@ def main(config):
         hidden_size=config.dynamics_hidden_size, drop_prob=config.dropout, drop_input=True)
     dynamics_optimizer = torch.optim.Adam(dynamics_model.parameters(
     ), lr=config.dynamics_lr, weight_decay=config.dynamics_weight_decay)
-    dynamics_scheduler = torch.optim.lr_scheduler.StepLR(dynamics_optimizer, step_size=1, gamma=config.dynamics_lr_gamma)
+    dynamics_scheduler = torch.optim.lr_scheduler.StepLR(
+        dynamics_optimizer, step_size=1, gamma=config.dynamics_lr_gamma)
     wandb.watch(dynamics_model)
 
     # Policy
     if config.squash_func == 'sin':
-        squash_func = lambda x: sin_squash(x, scale=10.0)
+        def squash_func(x): return sin_squash(x, scale=10.0)
     elif config.squash_func == 'tanh':
-        squash_func = lambda x: 10 * torch.tanh(x)
+        def squash_func(x): return 10 * torch.tanh(x)
     else:
         raise ValueError(f'Invalid squashing function: {config.squash_func}')
 
     if config.policy_model.lower() == 'rbf':
         policy_model = RBFNetwork(input_size=env.observation_space.shape[0], hidden_size=50,
-                                output_size=env.action_space.shape[0], basis_func=gaussian_rbf,
-                                squash_func=squash_func,
-                                output_bias=bool(config.policy_output_bias))
+                                  output_size=env.action_space.shape[0], basis_func=gaussian_rbf,
+                                  squash_func=squash_func,
+                                  output_bias=bool(config.policy_output_bias))
     elif config.policy_model.lower() == 'mlp':
         policy_model = MLPPolicy(input_size=env.observation_space.shape[0], hidden_size=100,
-                                output_size=env.action_space.shape[0],
-                                squash_func=squash_func,
-                                output_bias=bool(config.policy_output_bias))
+                                 output_size=env.action_space.shape[0],
+                                 squash_func=squash_func,
+                                 output_bias=bool(config.policy_output_bias))
+    else:
+        raise ValueError(f'Invalid Policy Model name: {config.policy_model}')
     wandb.watch(policy_model)
     policy_optimizer = torch.optim.Adam(policy_model.parameters(), lr=config.policy_lr)
-    policy_scheduler = torch.optim.lr_scheduler.StepLR(policy_optimizer, step_size=1, gamma=config.policy_lr_gamma)
+    policy_scheduler = torch.optim.lr_scheduler.StepLR(
+        policy_optimizer, step_size=1, gamma=config.policy_lr_gamma)
     # Define a random policy for initial experience
     rand_policy = RandomPolicy(env)
 
@@ -118,8 +121,8 @@ def main(config):
         wandb.log({'dynamics_val_loss': dynamics_test_loss})
 
         train_dynamics_model(dynamics_model, dataloader, dynamics_optimizer,
-                                summary_writer=writer,
-                                start_step=i*config.dynamics_num_iter)
+                             summary_writer=writer,
+                             start_step=i*config.dynamics_num_iter)
         train_policy(dynamics_model, policy_model, policy_optimizer, env,
                      cost_function=cartpole_cost_torch,
                      num_iter=config.num_policy_iter,
@@ -135,7 +138,7 @@ def main(config):
 
         eval_rewards_sim = eval_policy_on_model(
             env, policy_model, dynamics_model, cost_function=cartpole_cost_torch,
-            num_particles = 50, num_steps=config.num_steps_in_trial, moment_matching=False).mean().data.cpu().numpy()
+            num_particles=50, num_steps=config.num_steps_in_trial, moment_matching=False).mean().data.cpu().numpy()
 
         writer.add_scalar('rewards/evaluation_real', eval_rewards.mean(), i+1)
         writer.add_scalar('rewards/evaluation_model', eval_rewards_sim, i+1)
@@ -143,7 +146,7 @@ def main(config):
         writer.add_histogram('rewards/evaluation_real_hist', eval_rewards, i+1)
         # Compare model trajectories to real trajectories
         writer.add_figure(
-            'rollout trajectory vs true',plot_model_rollout_vs_true(
+            'rollout trajectory vs true', plot_model_rollout_vs_true(
                 env, policy_model, dynamics_model, cost_function=cartpole_cost_torch,
                 num_model_runs=10, num_steps=config.num_steps_in_trial,
                 log_dir=run_dir, log_name=f'step_{i}_traj')[0], i+1)
