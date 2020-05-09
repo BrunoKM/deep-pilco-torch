@@ -4,8 +4,9 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import os
-from torchpilco.cartpole_swingup import CartPoleSwingUp, cartpole_cost_torch
-from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset, convert_trajectory_to_training
+from torchpilco.cartpole_swingup import cartpole_cost_torch
+from torchpilco.data import rollout, DynamicsDataBuffer, ScaledUpDataset
+from torchpilco.data import convert_trajectory_to_training
 from torchpilco.dynamics_models import MCDropoutDynamicsNN
 from torchpilco.policy_models import RBFNetwork, RandomPolicy, MLPPolicy, sin_squash, gaussian_rbf
 from torchpilco.training import train_dynamics_model, train_policy
@@ -33,7 +34,8 @@ hyperparameter_defaults = dict(
     buffer_size=10,
     policy_output_bias=0,
     squash_func='tanh',
-    random_seed=0
+    random_seed=0,
+    dropout_on_input=1,
 )
 
 wandb.init(config=hyperparameter_defaults, project="model-based-rl-for-control")
@@ -59,7 +61,8 @@ def main(config):
     dynamics_model = MCDropoutDynamicsNN(
         input_dim=env.observation_space.shape[0]+env.action_space.shape[0],
         output_dim=env.observation_space.shape[0],
-        hidden_size=config.dynamics_hidden_size, drop_prob=config.dropout, drop_input=True)
+        hidden_size=config.dynamics_hidden_size, drop_prob=config.dropout,
+        drop_input=bool(config.dropout_on_input))
     dynamics_optimizer = torch.optim.Adam(dynamics_model.parameters(
     ), lr=config.dynamics_lr, weight_decay=config.dynamics_weight_decay)
     dynamics_scheduler = torch.optim.lr_scheduler.StepLR(
