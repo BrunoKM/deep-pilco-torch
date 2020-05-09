@@ -36,6 +36,7 @@ hyperparameter_defaults = dict(
     squash_func='tanh',
     random_seed=0,
     dropout_on_input=1,
+    rand_policy_on_start=0
 )
 
 wandb.init(config=hyperparameter_defaults, project="model-based-rl-for-control")
@@ -107,7 +108,10 @@ def main(config):
         test_data_buffer.push(*convert_trajectory_to_training(states, actions))
 
     # Initial experience:
-    states, actions, rewards = rollout(env, policy_model, num_steps=config.num_steps_in_trial)
+    if config.rand_policy_on_start:
+        states, actions, rewards = rollout(env, rand_policy, num_steps=config.num_steps_in_trial)
+    else:
+        states, actions, rewards = rollout(env, policy_model, num_steps=config.num_steps_in_trial)
     writer.add_figure('sampled trajectory', plot_trajectory(states, actions, rewards)[0], 0)
     data_buffer.push(*convert_trajectory_to_training(states, actions))
 
