@@ -36,6 +36,7 @@ hyperparameter_defaults = dict(
     squash_func='tanh',
     random_seed=0,
     dropout_on_input=1,
+    moment_matching=1,
     rand_policy_on_start=0
 )
 
@@ -134,7 +135,8 @@ def main(config):
                      cost_function=cartpole_cost_torch,
                      num_iter=config.num_policy_iter,
                      num_time_steps=config.num_steps_in_trial,
-                     num_particles=config.policy_batch_size, moment_matching=True,
+                     num_particles=config.policy_batch_size,
+                     moment_matching=bool(config.moment_matching),
                      summary_writer=writer, start_step=i*config.num_policy_iter,
                      discount_factor=config.discount_factor)
         # Evaluate the policy
